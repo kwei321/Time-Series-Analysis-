@@ -1,0 +1,687 @@
+---
+title: "Time Series Analyst HW1"
+output: html_document
+---
+The question itself is highlighted in **bold** text
+
+My answers are highlight in the *italic* text
+
+
+Set up directory, install packages, and load data
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+rm (list = ls())  
+setwd("D:/Gatech OneDrive/OneDrive - Georgia Institute of Technology/Documents/Time Series Analysis/Week1")
+
+if (!require("data.table")) install.packages("data.table")
+library ("data.table")
+
+#Load data
+data=read.csv("Refiner.csv",header=TRUE)
+no2=data[,2]
+propane=data[,3]
+jet=data[,4]
+```
+
+
+**Question 1: Exploratory Data Analysis**
+
+**Display and identify the main features of the time series plot of the data. Which assumptions of stationarity seem to be violated for these three time series?**
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+no2_ts= ts(no2,frequency = 12)
+ts.plot(no2_ts,main = "no2 Time Series Plot", ylab = "no2", xlab = "time")
+```
+
+*From the no2 time series plot, it can be seen that the mean is very different from the beginning portion and the later porition of the time series plot. A downward trend can be clearly seen. The constant mean assumption is violated. In addition, the variance before year 6 are higher than the variance after year 6. As a result,the third assumption of covariance between any two observation depends only on the time lag between them is also violated. *
+
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+propane_ts= ts(propane,frequency = 12)
+ts.plot(propane_ts,main = "Propane Time Series Plot", ylab = "Propane", xlab = "time")
+```
+
+*From the propane time series plot, it can be seen that there is a upward trend; thus the constant mean assumption of stationarity is violated*
+
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+jet_ts= ts(jet,frequency = 12)
+ts.plot(jet_ts,main = "Jet Time Series Plot", ylab = "jet", xlab = "time")
+```
+
+*From the jet time series plot, it can be seen that there is a downward trend; thus the constant mean assumption of stationarity is violated*
+
+
+**Display and identify the main features of the 1st order differenced time series plot of the data -- you may use the diff() R command. Which assumptions of stationarity seem to be violated for these three time series?**
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+no2_ts_diff= diff(no2_ts,differences=1)
+ts.plot(no2_ts_diff,main = "no2 1st order Differenced Time Series Plot", ylab = "no2", xlab = "time")
+
+```
+
+*The 1st order difference plots of no2 shows that the trend is gone compared to the original plots; however, the variance before year 6 and after year 6 is still differenct, indicating that the 3rd assumption of the weak stationarity is violated.In addition, there is a sharp downward peak at about x = 5.5, which is also an indication of non-constant variance*
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+propane_ts_diff= diff(propane_ts,differences=1)
+ts.plot(propane_ts_diff,main = "Propane 1st order Differenced Time Series Plot", ylab = "propane", xlab = "time")
+
+```
+
+*From the difference plot of propane, the mean is constant but the variance after year 8 and before year 8 seemed to be different, indicating that the 3rd assumption is violated. *
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+jet_ts_diff= diff(jet_ts,differences=1)
+ts.plot(jet_ts_diff,main = "Jet 1st order Differenced Time Series Plot", ylab = "jet", xlab = "time")
+```
+
+
+*From the difference plot of jet, the mean is constant and the variance seemed to be constant too thus no assumption is violated*
+
+
+**----------------------------------------------------**
+
+**Question 2: Trend Estimation**
+
+**Fit the following models to the original time series to estimate the trend:**
+
+**- Moving average**
+
+**- Parametric quadratic polynomial**
+
+**- Local Polynomial**
+
+**- Splines**
+
+**Plot the fitted values along with the original time series plot. Plot the residuals and ACF of the residuals. Comment on the four models fit and on the appropriateness of the stationarity assumption of the residuals.**
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# Create equally spaced time points for fitting trends
+time_pts = c(1:length(no2_ts))
+time_pts = c(time_pts - min(time_pts))/max(time_pts) # divide to equal spacing between 0 and 1
+x1 = time_pts
+x2 = time_pts^2
+# Trend Estimation of No2
+
+####### moving average#######
+no2_mavfit = ksmooth(time_pts,no2_ts,kernel = "box") #ksmoothing command is for kernel regression
+no2_mavfitted = ts(no2_mavfit$y,frequency=12) #transformed fitted value to time series
+
+####### - Parametric quadratic polynomial #######
+# use the good old lm() command for fitting quadratic polynomial
+no2_lmfit = lm(no2_ts~x1+x2)
+no2_lmfitted = ts(fitted(no2_lmfit),frequency=12)
+#summary(no2_lmfit)
+
+###### Local Polynomial##########
+no2_locfit = loess(no2_ts~time_pts)  #loess is the method for local polynomial regression fitting
+no2_locfitted = ts(fitted(no2_locfit),frequency=12)
+
+
+##### Splines Trend Estimation#####
+if (!require("mgcv")) install.packages("mgcv")
+library ("mgcv")
+no2_gamfit = gam(no2_ts~s(time_pts)) # use s() to specify spline fit
+no2_gamfitted = ts(fitted(no2_gamfit),frequency=12)
+```
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+#Trend Comparison and plotting
+no2_allval = c(no2_mavfitted,no2_lmfitted,no2_locfitted,no2_gamfitted)
+ylim = c(min(no2_allval),max(no2_allval))
+
+ts.plot(no2_ts,main = "no2 Time Series Plot with fitted trends", ylab = "no2", xlab = "time",ylim = ylim)
+lines(no2_mavfitted,lwd=2,col = "green")
+lines(no2_lmfitted,lwd=2,col = "purple")
+lines(no2_locfitted,lwd=2,col = "red")
+lines(no2_gamfitted,lwd=2,col = "orange")
+legend(x = 10,y = 22000,legend = c("MAV","LM","LOESS","GAM"),lty=1,lwd=2,
+       col = c("green","purple","red","orange"))
+```
+
+*From the above plot, it can be seen that MAV model is the worst, and the spline fit works the best. The LM and the LOESS local produce acceptable fits too. *
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend removal
+no2_resid_mav = no2_ts - no2_mavfitted
+no2_resid_lm = no2_ts - no2_lmfitted
+no2_resid_loc = no2_ts - no2_locfitted
+no2_resid_gam = no2_ts - no2_gamfitted
+
+par(mfrow = c(2,2))
+ts.plot(no2_resid_mav,ylab = "residual",main = "Resid for no2 after MAV trend removal")
+ts.plot(no2_resid_lm,ylab = "residual",main = "Resid for no2 after LM trend removal")
+ts.plot(no2_resid_loc,ylab = "residual",main = "Resid for no2 after LOESS trend removal")
+ts.plot(no2_resid_gam,ylab = "residual",main = "Resid for no2 after spline trend removal")
+```
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF plot of residuals
+par(mfrow = c(2,2))
+acf(no2_resid_mav,lag.max=12*8,main = "ACF of MAV resid") # need to specify lag.max, default value does not work 
+acf(no2_resid_lm,lag.max=12*8,main = "ACF of LM resid")
+acf(no2_resid_loc,lag.max=12*8,main = "ACF of LOESS resid")
+acf(no2_resid_gam,lag.max=12*8,main = "ACF of GAM resid")
+```
+
+*For no2: *
+
+*The residual process after MAV trend removal show non-stationarity due to non-constant mean and non-constant variance. The variance before year 6 is larger than those after year 6. The ACF plot also does not stablize within the significance band. *
+
+*The residual process after LM trend removal show non-stationarity due to non-constant mean and non-constant stationarity. The ACF plot also showed seasonality pattern which is also an indication of non-stationarity*
+
+*The residual process after LOESS trend removal show non-stationarity due to non constant variance. The mean is relatively stable compared to the first 2 model. The ACF plot also showed seasonality pattern which is also an indication of non-stationarity*
+
+*The residual process after GAM trend removal shows nonstationarity, and the reason is the same as that of LOESS trend removal. *
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# Trend Estimation of Propane
+
+####### moving average#######
+propane_mavfit = ksmooth(time_pts,propane_ts,kernel = "box") #ksmoothing command is for kernel regression
+propane_mavfitted = ts(propane_mavfit$y,frequency=12) #transformed fitted value to time series
+
+####### - Parametric quadratic polynomial #######
+# use the good old lm() command for fitting quadratic polynomial
+propane_lmfit = lm(propane_ts~x1+x2)
+propane_lmfitted = ts(fitted(propane_lmfit),frequency=12)
+#summary(propane_lmfit)
+
+###### Local Polynomial##########
+propane_locfit = loess(propane_ts~time_pts)  #loess is the method for local polynomial regression fitting
+propane_locfitted = ts(fitted(propane_locfit),frequency=12)
+
+
+##### Splines Trend Estimation#####
+if (!require("mgcv")) install.packages("mgcv")
+library ("mgcv")
+propane_gamfit = gam(propane_ts~s(time_pts)) # use s() to specify spline fit
+propane_gamfitted = ts(fitted(propane_gamfit),frequency=12)
+```
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+#Trend Comparison and plotting
+propane_allval = c(propane_mavfitted,propane_lmfitted,propane_locfitted,propane_gamfitted)
+ylim = c(min(propane_allval),max(propane_allval))
+
+ts.plot(propane_ts,main = "propane Time Series Plot with fitted trends", ylab = "propane", xlab = "time")
+lines(propane_mavfitted,lwd=2,col = "green")
+lines(propane_lmfitted,lwd=2,col = "purple")
+lines(propane_locfitted,lwd=2,col = "red")
+lines(propane_gamfitted,lwd=2,col = "orange")
+legend(x = 2,y = 8000,legend = c("MAV","LM","LOESS","GAM"),lty=1,lwd=2,
+       col = c("green","purple","red","orange"))
+```
+
+*The above plot show the trend estimation for propane. The sppline fit perform the best and the MAV performs the worst. *
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend removal
+propane_resid_mav = propane_ts - propane_mavfitted
+propane_resid_lm = propane_ts - propane_lmfitted
+propane_resid_loc = propane_ts - propane_locfitted
+propane_resid_gam = propane_ts - propane_gamfitted
+
+
+par(mfrow = c(2,2))
+ts.plot(propane_resid_mav,ylab = "residual",main = "Resid for propane after MAV trend removal")
+ts.plot(propane_resid_lm,ylab = "residual",main = "Resid for propane after LM trend removal")
+ts.plot(propane_resid_loc,ylab = "residual",main = "Resid for propane after LOESS trend removal")
+ts.plot(propane_resid_gam,ylab = "residual",main = "Resid for propane after spline trend removal")
+```
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF plot of residuals
+par(mfrow = c(2,2))
+acf(propane_resid_mav,lag.max=12*8,main = "ACF of MAV resid")
+acf(propane_resid_lm,lag.max=12*8,main = "ACF of LM resid")
+acf(propane_resid_loc,lag.max=12*8,main = "ACF of LOESS resid")
+acf(propane_resid_gam,lag.max=12*8,main = "ACF of GAM resid")
+```
+
+
+*The residual plot of propane shows that even the mean is relatively constant compared to the NO2 for all four models. The variance seemed to be the same accross the time spectrum, though there are a couple points that showed relatively larger spikes. Overall, the residual process is relatively stationary.  The ACF plots shows that after after h = 1, the autocorrelation function are within the significance band, which is also an indication of stationarity. *
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# Trend Estimation of jet
+
+####### moving average#######
+jet_mavfit = ksmooth(time_pts,jet_ts,kernel = "box") #ksmoothing command is for kernel regression
+jet_mavfitted = ts(jet_mavfit$y,frequency=12) #transformed fitted value to time series
+
+####### - Parametric quadratic polynomial #######
+# use the good old lm() command for fitting quadratic polynomial
+jet_lmfit = lm(jet_ts~x1+x2)
+jet_lmfitted = ts(fitted(jet_lmfit),frequency=12)
+#summary(jet_lmfit)
+
+###### Local Polynomial##########
+jet_locfit = loess(jet_ts~time_pts)  #loess is the method for local polynomial regression fitting
+jet_locfitted = ts(fitted(jet_locfit),frequency=12)
+
+
+##### Splines Trend Estimation#####
+if (!require("mgcv")) install.packages("mgcv")
+library ("mgcv")
+jet_gamfit = gam(jet_ts~s(time_pts)) # use s() to specify spline fit
+jet_gamfitted = ts(fitted(jet_gamfit),frequency=12)
+```
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+#Trend Comparison and plotting
+jet_allval = c(jet_mavfitted,jet_lmfitted,jet_locfitted,jet_gamfitted)
+ylim = c(min(jet_allval),max(jet_allval))
+
+ts.plot(jet_ts,main = "jet Time Series Plot with fitted trends", ylab = "jet", xlab = "time")
+lines(jet_mavfitted,lwd=2,col = "green")
+lines(jet_lmfitted,lwd=2,col = "purple")
+lines(jet_locfitted,lwd=2,col = "red")
+lines(jet_gamfitted,lwd=2,col = "orange")
+legend(x = 10,y = 43000,legend = c("MAV","LM","LOESS","GAM"),lty=1,lwd=2,
+       col = c("green","purple","red","orange"))
+```
+
+*The above plot shows that after fitting the trend estimation, all four model works relatively well. It is possible that the spline may be overemphasizing the seasonality. *
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend removal
+jet_resid_mav = jet_ts - jet_mavfitted
+jet_resid_lm = jet_ts - jet_lmfitted
+jet_resid_loc = jet_ts - jet_locfitted
+jet_resid_gam = jet_ts - jet_gamfitted
+
+
+par(mfrow = c(2,2))
+ts.plot(jet_resid_mav,ylab = "residual",main = "Resid for jet after MAV trend removal")
+ts.plot(jet_resid_lm,ylab = "residual",main = "Resid for jet after LM trend removal")
+ts.plot(jet_resid_loc,ylab = "residual",main = "Resid for jet after LOESS trend removal")
+ts.plot(jet_resid_gam,ylab = "residual",main = "Resid for jet after spline trend removal")
+```
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF plot of residuals
+par(mfrow = c(2,2))
+acf(jet_resid_mav,lag.max=12*8,main = "ACF of MAV resid")
+acf(jet_resid_lm,lag.max=12*8,main = "ACF of LM resid")
+acf(jet_resid_loc,lag.max=12*8,main = "ACF of LOESS resid")
+acf(jet_resid_gam,lag.max=12*8,main = "ACF of GAM resid")
+```
+
+*The residual plot of jet after trend remove shows that for all 4 models, the residual process has a constant mean and the variance is almost constant accross the time. However, by looking at the ACF plots, seasonality pattern can be clearly seen and some of the points are outside of the significance band; thus, they are not stationary. *
+
+
+**Question 3: Seasonality Estimation**
+
+**Fit the following models to the original time series to estimate monthly seasonality:**
+
+**-ANOVA approach**
+
+**-cos-sin model**
+
+**Plot the fitted values along with the original time series plot. Plot the residuals and ACF of the residuals. Comment on the two models fit and on the appropriateness of the stationarity assumption of the residuals.**
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+### SEASONALITY estimation of no2 ####
+if (!require("TSA")) install.packages("TSA")
+library ("TSA")
+
+#estimate using ANOVA approach
+month = season(no2_ts) # this will yield a vector of jan, feb, march...then repeat
+no2_smodel1 = lm(no2_ts~month-1) #without intecept
+no2_smodel1_fitted = ts(fitted(no2_smodel1),frequency=12)
+summary(no2_smodel1) #even though this model has high r^2, it is due to the inflation of no intercept. 
+print("---------------------------------------------")
+no2_smodel2 = lm(no2_ts~month) #with intecept
+summary(no2_smodel2) 
+no2_smodel2_fitted = ts(fitted(no2_smodel2),frequency=12)
+print("---------------------------------------------")
+
+```
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+#estimate using cos-sin model
+no2_smodel3 = lm(no2_ts~harmonic(no2_ts,1))
+summary(no2_smodel3)
+no2_smodel3_fitted = ts(fitted(no2_smodel3),frequency=12)
+
+no2_smodel4 = lm(no2_ts~harmonic(no2_ts,2))
+summary(no2_smodel4)
+no2_smodel4_fitted = ts(fitted(no2_smodel4),frequency=12)
+
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+#Seasonality Comparison and plotting
+
+ts.plot(no2_ts,main = "no2 Time Series Plot with fitted seasonality", ylab = "no2", xlab = "time")
+lines(no2_smodel1_fitted,lwd=2,col = "green")
+lines(no2_smodel2_fitted,lwd=2,col = "purple")
+lines(no2_smodel3_fitted,lwd=2,col = "red")
+lines(no2_smodel4_fitted,lwd=2,col = "orange")
+legend(x = 9,y = 24000,legend = c("ANOVA w/o Intercept","ANOVA w/ Intercept","cos-sin freq = 1","cos-sin freq = 2"),lty=1,lwd=2,
+       col = c("green","purple","red","orange"))
+```
+*The seasonality estimation does not describe the no2 data well at all due to a strong presence of trends. *
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend removal
+no2_resid_smodel1 = no2_ts - no2_smodel1_fitted
+no2_resid_smodel2 = no2_ts - no2_smodel2_fitted
+no2_resid_smodel3 = no2_ts - no2_smodel3_fitted
+no2_resid_smodel4 = no2_ts - no2_smodel4_fitted
+
+
+par(mfrow = c(2,2))
+ts.plot(no2_resid_smodel1,ylab = "residual",main = "Resid for no2 ANOVA w/o seasonality removal")
+ts.plot(no2_resid_smodel2,ylab = "residual",main = "Resid for no2 ANOVA w. seasonality removal")
+ts.plot(no2_resid_smodel3,ylab = "residual",main = "Resid for no2 cos-sin freq=1 removal")
+ts.plot(no2_resid_smodel4,ylab = "residual",main = "Resid for no2 cos-sin freq=2 removal")
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF plot of residuals after seasonality removal
+par(mfrow = c(2,2))
+acf(no2_resid_smodel1,max.lag = 12*8,main = "ACF of model 1 resid")
+acf(no2_resid_smodel2,max.lag = 12*8,main = "ACF of model 2 resid")
+acf(no2_resid_smodel3,max.lag = 12*8,main = "ACF of model 3 resid")
+acf(no2_resid_smodel4,max.lag = 12*8,main = "ACF of model 4 resid")
+```
+
+*As mentioned earlier, seasonality alone is a poor fit to the original time series, thus the residual process is not stationary, as evident by the time series plot of the residual process and the ACF plots exceeding significance level for all lags.The ACF is slowly decreasing indicating that the presence of a trend.  *
+
+
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+### SEASONALITY estimation of propane ####
+
+#estimate using ANOVA approach
+month = season(propane_ts) # this will yield a vector of jan, feb, march...then repeat
+propane_smodel1 = lm(propane_ts~month-1) #without intecept
+propane_smodel1_fitted = ts(fitted(propane_smodel1),frequency=12)
+summary(propane_smodel1)
+print("---------------------------------------------")
+propane_smodel2 = lm(propane_ts~month) #with intecept
+summary(propane_smodel2) 
+propane_smodel2_fitted = ts(fitted(propane_smodel2),frequency=12)
+print("---------------------------------------------")
+
+
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+#estimate using cos-sin model
+propane_smodel3 = lm(propane_ts~harmonic(propane_ts,1))
+summary(propane_smodel3)
+propane_smodel3_fitted = ts(fitted(propane_smodel3),frequency=12)
+
+propane_smodel4 = lm(propane_ts~harmonic(propane_ts,2))
+summary(propane_smodel4)
+propane_smodel4_fitted = ts(fitted(propane_smodel4),frequency=12)
+
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+#Seasonality Comparison and plotting
+
+ts.plot(propane_ts,main = "propane Time Series Plot with fitted seasonality", ylab = "propane", xlab = "time")
+lines(propane_smodel1_fitted,lwd=2,col = "green")
+lines(propane_smodel2_fitted,lwd=2,col = "purple")
+lines(propane_smodel3_fitted,lwd=2,col = "red")
+lines(propane_smodel4_fitted,lwd=2,col = "orange")
+legend(x = 9,y = 24000,legend = c("ANOVA w/o Intercept","ANOVA w/ Intercept","cos-sin freq = 1","cos-sin freq = 2"),lty=1,lwd=2,
+       col = c("green","purple","red","orange"))
+```
+
+*Similar to the no2 data, seasonality alone fits poorly on the propane time series data.*
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend removal
+propane_resid_smodel1 = propane_ts - propane_smodel1_fitted
+propane_resid_smodel2 = propane_ts - propane_smodel2_fitted
+propane_resid_smodel3 = propane_ts - propane_smodel3_fitted
+propane_resid_smodel4 = propane_ts - propane_smodel4_fitted
+
+
+par(mfrow = c(2,2))
+ts.plot(propane_resid_smodel1,ylab = "residual",main = "Resid for propane ANOVA w/o seasonality removal")
+ts.plot(propane_resid_smodel2,ylab = "residual",main = "Resid for propane ANOVA w. seasonality removal")
+ts.plot(propane_resid_smodel3,ylab = "residual",main = "Resid for propane cos-sin freq=1 removal")
+ts.plot(propane_resid_smodel4,ylab = "residual",main = "Resid for propane cos-sin freq=2 removal")
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF plot of residuals after seasonality removal
+par(mfrow = c(2,2))
+acf(propane_resid_smodel1,max.lag = 12*8,main = "ACF of model 1 resid")
+acf(propane_resid_smodel2,max.lag = 12*8,main = "ACF of model 2 resid")
+acf(propane_resid_smodel3,max.lag = 12*8,main = "ACF of model 3 resid")
+acf(propane_resid_smodel4,max.lag = 12*8,main = "ACF of model 4 resid")
+```
+
+*The residual process after seasonality removal for all 4 models are not stationary. There is a upward trends. *
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+### SEASONALITY estimation of jet ####
+
+#estimate using ANOVA approach
+month = season(jet_ts) # this will yield a vector of jan, feb, march...then repeat
+jet_smodel1 = lm(jet_ts~month-1) #without intecept
+jet_smodel1_fitted = ts(fitted(jet_smodel1),frequency=12)
+summary(jet_smodel1)
+print("---------------------------------------------")
+jet_smodel2 = lm(jet_ts~month) #with intecept
+summary(jet_smodel2) 
+jet_smodel2_fitted = ts(fitted(jet_smodel2),frequency=12)
+print("---------------------------------------------")
+
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+#estimate using cos-sin model
+jet_smodel3 = lm(jet_ts~harmonic(jet_ts,1))
+summary(jet_smodel3)
+jet_smodel3_fitted = ts(fitted(jet_smodel3),frequency=12)
+
+jet_smodel4 = lm(jet_ts~harmonic(jet_ts,2))
+summary(jet_smodel4)
+jet_smodel4_fitted = ts(fitted(jet_smodel4),frequency=12)
+
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+#Seasonality Comparison and plotting
+
+ts.plot(jet_ts,main = "jet Time Series Plot with fitted seasonality", ylab = "jet", xlab = "time")
+lines(jet_smodel1_fitted,lwd=2,col = "green")
+lines(jet_smodel2_fitted,lwd=2,col = "purple")
+lines(jet_smodel3_fitted,lwd=2,col = "red")
+lines(jet_smodel4_fitted,lwd=2,col = "orange")
+legend(x = 9,y = 44000,legend = c("ANOVA w/o Intercept","ANOVA w/ Intercept","cos-sin freq = 1","cos-sin freq = 2"),lty=1,lwd=2,
+       col = c("green","purple","red","orange"))
+```
+
+*For the jet data, seasonality alone fits poorly to the original time series. *
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend removal
+jet_resid_smodel1 = jet_ts - jet_smodel1_fitted
+jet_resid_smodel2 = jet_ts - jet_smodel2_fitted
+jet_resid_smodel3 = jet_ts - jet_smodel3_fitted
+jet_resid_smodel4 = jet_ts - jet_smodel4_fitted
+
+
+par(mfrow = c(2,2))
+ts.plot(jet_resid_smodel1,ylab = "residual",main = "Resid for jet ANOVA w/o seasonality removal")
+ts.plot(jet_resid_smodel2,ylab = "residual",main = "Resid for jet ANOVA w. seasonality removal")
+ts.plot(jet_resid_smodel3,ylab = "residual",main = "Resid for jet cos-sin freq=1 removal")
+ts.plot(jet_resid_smodel4,ylab = "residual",main = "Resid for jet cos-sin freq=2 removal")
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF plot of residuals after seasonality removal
+par(mfrow = c(2,2))
+acf(jet_resid_smodel1,lag.max=12*8,main = "ACF of model 1 resid")
+acf(jet_resid_smodel2,lag.max=12*8,main = "ACF of model 2 resid")
+acf(jet_resid_smodel3,lag.max=12*8,main = "ACF of model 3 resid")
+acf(jet_resid_smodel4,lag.max=12*8,main = "ACF of model 4 resid")
+```
+
+*The residual process after seasonality removal for jet data shows non-stationarity with a downward trends. The ACF of all 4 model clearly shows non-stationarity as there is a strong trend and outside of the significance band.*
+
+
+
+**Question 4: Trend and Seasonality Estimation**
+
+**Fit the following models to the original time series to estimate the trend and seasonality:**
+
+**- Linear regression**
+**- Non-parametric model**
+**Plot the fitted values along with the original time series plot. Plot the residuals and ACF of the residuals. Comment on the two models fit and on the appropriateness of the stationarity assumption of the residuals.**
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+## Fit a parametric model for both trend and seasonality
+no2_stlmfit = lm(no2_ts~x1+x2+harmonic(no2_ts,2))
+no2_stlmfitted = ts(fitted(no2_stlmfit),frequency = 12)
+
+## Fit a non-parametric model for trend and linear model for seasonality
+no2_stgamfit = gam(no2_ts~s(time_pts)+harmonic(no2_ts,2))
+no2_stgamfitted  = ts(fitted(no2_stgamfit),frequency = 12)
+
+
+# plot the fitted value with the original time series
+
+ts.plot(no2_ts,main = "no2 Time Series Plot with fitted trend-seasonality models", ylab = "no2", xlab = "time")
+lines(no2_stlmfitted,lwd=2,col = "green")
+lines(no2_stgamfitted,lwd=2,col = "purple")
+
+legend(x = 8,y = 25000,legend = c("Linear regression","Non-parametric model"),lty=1,lwd=2,
+       col = c("green","purple"))
+```
+
+*The the no2 data, the non-parametric model fits the no2 data better, especially for hte data points after year 10.* 
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend-seasonality removal
+no2_resid_stlm = no2_ts - no2_stlmfitted
+no2_resid_stgam = no2_ts - no2_stgamfitted
+
+ts.plot(no2_resid_stlm,ylab = "residual",main = "Resid for no2 after LM trend-season model")
+ts.plot(no2_resid_stgam,ylab = "residual",main = "Resid for no2 after non-para trend-season model ")
+```
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF of residual process after trend-seasonality removal
+no2_resid_stlm = no2_ts - no2_stlmfitted
+no2_resid_stgam = no2_ts - no2_stgamfitted
+
+acf(no2_resid_stlm,lag.max=12*8,main = "ACF of residual after LM trend-season removal for no2")
+acf(no2_resid_stgam,lag.max=12*8,main = "ACF of residual after Non-para trend-season removal for no2")
+```
+
+*The linear regression model, the residual process after seasonality and trend removal shows a non-regular trend (moving up and down then up); thus the mean is not constant and the process is not stationary. The ACF plot also shows that there is some seasonality in the residual process with some of the points outside of significance band. *
+
+*On the other hand, using the non-parametric model, the residual process shows constant mean and constant variance; thus the residual process is stationary. ACF plot shows that that almost all the lags are within significance band, which is also an indication of stationarity.*
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+#propane
+
+## Fit a parametric model for both trend and seasonality
+propane_stlmfit = lm(propane_ts~x1+x2+harmonic(propane_ts,2))
+propane_stlmfitted = ts(fitted(propane_stlmfit),frequency = 12)
+
+## Fit a non-parametric model for trend and linear model for seasonality
+propane_stgamfit = gam(propane_ts~s(time_pts)+harmonic(propane_ts,2))
+propane_stgamfitted  = ts(fitted(propane_stgamfit),frequency = 12)
+
+
+# plot the fitted value with the original time series
+
+ts.plot(propane_ts,main = "propane Time Series Plot with fitted trend-seasonality models", ylab = "propane", xlab = "time")
+lines(propane_stlmfitted,lwd=2,col = "green")
+lines(propane_stgamfitted,lwd=2,col = "purple")
+
+legend(x = 4,y = 8000,legend = c("Linear regression","Non-parametric model"),lty=1,lwd=2,
+       col = c("green","purple"))
+```
+
+*For propane data, the non-parametric model clearly works better. *
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend-seasonality removal
+propane_resid_stlm = propane_ts - propane_stlmfitted
+propane_resid_stgam = propane_ts - propane_stgamfitted
+
+ts.plot(propane_resid_stlm,ylab = "residual",main = "Resid for propane after LM trend-season model")
+ts.plot(propane_resid_stgam,ylab = "residual",main = "Resid for propane after non-para trend-season model ")
+```
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF of residual process after trend-seasonality removal
+propane_resid_stlm = propane_ts - propane_stlmfitted
+propane_resid_stgam = propane_ts - propane_stgamfitted
+
+acf(propane_resid_stlm,lag.max=12*12,main = "ACF of residual after LM trend-season removal for propane")
+acf(propane_resid_stgam,lag.max=12*12,main = "ACF of residual after Non-para trend-season removal for propane")
+```
+
+*For the residual process after seasonality and trend removal of the propane data, the mean is constant and the variance is constant, indicating stationarity. Note that in the linear regression residual plot, after year > 12 the mean deviate slightly from the rest of the data. ACF plots shows that the autocorrelation falls within the significance band after lag =1, which is an indication of stationarity.*
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+#jet
+
+## Fit a parametric model for both trend and seasonality
+jet_stlmfit = lm(jet_ts~x1+x2+harmonic(jet_ts,2))
+jet_stlmfitted = ts(fitted(jet_stlmfit),frequency = 12)
+
+## Fit a non-parametric model for trend and linear model for seasonality
+jet_stgamfit = gam(jet_ts~s(time_pts)+harmonic(jet_ts,2))
+jet_stgamfitted  = ts(fitted(jet_stgamfit),frequency = 12)
+
+
+# plot the fitted value with the original time series
+
+ts.plot(jet_ts,main = "jet Time Series Plot with fitted trend-seasonality models", ylab = "jet", xlab = "time")
+lines(jet_stlmfitted,lwd=2,col = "green")
+lines(jet_stgamfitted,lwd=2,col = "purple")
+
+legend(x = 8,y = 44000,legend = c("Linear regression","Non-parametric model"),lty=1,lwd=2,
+       col = c("green","purple"))
+```
+
+*For the jet data, both method of seasonality + trends estimation relatively works well with the data. The non-parameteric method works better. *
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the residuals after trend-seasonality removal
+jet_resid_stlm = jet_ts - jet_stlmfitted
+jet_resid_stgam = jet_ts - jet_stgamfitted
+
+ts.plot(jet_resid_stlm,ylab = "residual",main = "Resid for jet after LM trend-season model")
+ts.plot(jet_resid_stgam,ylab = "residual",main = "Resid for jet after non-para trend-season model ")
+```
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# plot the ACF of residual process after trend-seasonality removal
+jet_resid_stlm = jet_ts - jet_stlmfitted
+jet_resid_stgam = jet_ts - jet_stgamfitted
+
+acf(jet_resid_stlm,lag.max=12*8,main = "ACF of residual after LM trend-season removal for jet")
+acf(jet_resid_stgam,lag.max=12*8,main = "ACF of residual after Non-para trend-season removal for jet")
+```
+
+*The residual process after seasonality and trend removal for jet data have constant mean and variance and therefore staionary. The ACF after lag 1 are mostly in  the significance band, which is also an indication of stationarity.*
+

@@ -1,0 +1,392 @@
+---
+title: "Time Series Analysis HW2"
+output:
+  html_document: default
+  pdf_document: default
+---
+__The question itself is highlighted in **bold** text__
+
+__My answers are highlight in the *italic* text__
+
+
+Set up directory, install packages, and load data
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+rm (list = ls())  
+setwd("D:/Gatech OneDrive/OneDrive - Georgia Institute of Technology/Documents/Time Series Analysis/Week2")
+
+if (!require("data.table")) install.packages("data.table")
+library ("data.table")
+
+if (!require("TSA")) install.packages("TSA")
+library ("TSA")
+
+
+#Load data
+data=read.csv("hw2_latearrivals_data.csv",header=T)
+delta = ts(data[,"dl_pct_late"], start=2004, freq=12)
+aa = ts(data[,"aa_pct_late"], start=2004, freq=12)
+```
+
+
+**Question 1: Exploratory Data Analysis**
+
+**Display and identify the main features of the time series plot of the data. Which assumptions of stationarity seem to be violated for these three time series?**
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+ts.plot(delta,main = "delta time series plot", ylab = "late percentage", xlab = "time")
+acf(as.numeric(delta),main = "ACF of delta")
+```
+
+*From the delta time series plot, it can be seen that the mean is very different from the beginning portion and the later porition of the time series plot. A downward trend can be clearly seen. The constant mean assumption is violated. In addition, the variance before year 2015 are higher than the variance after year 2015. As a result,the third assumption of covariance between any two observation depends only on the time lag between them is also violated. THE ACF plot does not appraoch zero, which is another evidence of nonstationarity *
+
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+ts.plot(aa,main = "aa time series plot", ylab = "late percentage", xlab = "time")
+acf(as.numeric(aa),main = "ACF of aa")
+```
+
+*From the aa time series plot, it can be seen that even though the mean is relatively constant through the time series, the variance is nonconstant. The variance is larger at the beginning portion and the end portion compared to the portion between 2010 and 2015. The ACF also showed points outside of the significance level, which is another indication of non-stationarity*
+
+
+**Carry out any transformations you feel are necessary to obtain a stationary time series. Explain your choice of transformations. If no transformations are necessary, state why.**
+
+First, I try to difference the data by 1 lag. It seemed like the nonconstant variance is still there. 
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+ts.plot(ts(diff(delta),frequency = 12),main = "delta after 1 lag differencing")
+```
+
+
+
+
+To obtain a stationary time series for delta, I then performed the boxcox transformation and find out the best coefficient for transformation, followed by 1st order differencing or 2nd order differencing. It turns out that 2nd order differencing is better. This resulted in a relatively stationary time series. The ACF plot after the transformation shows that most of the correlation are within the significance band. 
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+library(MASS)
+bc_trans = boxcox(delta~1)
+best_y = max(bc_trans$y)
+best_trans = bc_trans$x[which(bc_trans$y == best_y)]
+
+bc_delta = delta^best_trans
+ts.plot(bc_delta,main = paste("delta after box-cox transformation with power =",round(best_trans,4)))
+
+ts.plot(diff(bc_delta,1),main = "1st order differencing of box-cox transform delta")
+ts.plot(diff(bc_delta,2),main = "2nd order differencing of box-cox transform delta")
+
+acf(as.numeric(diff(bc_delta,2)))
+```
+
+I also applied box-cox transformation followed by 1st order differencing on the aa data, the resulting time series seemed stationary. 
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+bc_trans2 = boxcox(aa~1)
+best_y2 = max(bc_trans2$y)
+best_trans2 = bc_trans2$x[which(bc_trans2$y == best_y2)]
+
+bc_aa = aa^best_trans2
+ts.plot(bc_aa,main = paste("aa after box-cox transformation with power =",round(best_trans2,4)))
+
+ts.plot(diff(bc_aa,1),main = "1st order differencing of box-cox transform aa")
+
+acf(as.numeric(diff(bc_aa,1)))
+```
+
+
+
+**Question 2: ARIMA Model**
+
+**Fit an ARIMA(p,d,q) model to the two time series and explain your choice of model (include ACF and PACF plots). Show the estimated parameters of each model.**
+
+*Let's look at the ACF and PACF plot of the 1st order differecing of delta*
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+acf(as.numeric(diff(delta)))
+pacf(as.numeric(diff(delta)))
+```
+
+
+
+*Define function to fit_arima, plot residuals, and perform independence test*
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+# define all the wrapper function
+fit_arima = function(ts_data,max_p = 7,d = 1,max_q = 7){
+  ## Order selection -- AIC 
+  n = length(ts_data)
+  
+  p = c(1:max_p)-1; q = c(1:max_q)-1
+  aic = matrix(0,max_p,max_q)
+  for(i in 1:max_p){
+    for(j in 1:max_q){
+      modij = arima(ts_data,order = c(p[i],d,q[j]), method='ML')
+      aic[i,j] = modij$aic-2*(p[i]+q[j]+1)+2*(p[i]+q[j]+1)*n/(n-p[i]-q[j]-2)
+      # calculate AICC
+    }  
+  }
+  
+  aicv = as.vector(aic)  
+  plot(aicv,ylab="AIC values")
+  indexp = rep(c(1:max_p),max_p)
+  indexq = rep(c(1:max_q),each=max_q) #each is due to using 
+  indexaic = which(aicv == min(aicv))
+  porder = indexp[indexaic]-1
+  qorder = indexq[indexaic]-1
+  iorder = d # not developed yet, this function only consider 1 value of d
+  
+  final_model = arima(ts_data, order = c(porder,d,qorder), method = "ML")
+  
+  results = list()
+  results$porder = porder
+  results$qorder = qorder
+  results$iorder = iorder
+  results$final_model= final_model
+  results$final_model_residual = resid(final_model)
+  
+  return (results)
+}
+
+
+plot_residual <- function(ts_residual){
+  ## GOF: residual analysis
+  # input of this function is the tiem series
+  # will output 2X2 plots, and they are ts plot, ACF, Histogram, QQplot
+  
+  plot(ts_residual, ylab='Residuals',type='o',main="Residual Plot")
+  abline(h=0)
+  par(mfrow=c(1,2))
+  acf(ts_residual,main="ACF: Residuals")
+  pacf(ts_residual,main="PACF: Residuals")
+  par(mfrow=c(1,2))
+  hist(ts_residual,xlab='Residuals',main='Histogram: Residuals')
+  qqnorm(ts_residual,ylab="Sample Q",xlab="Theoretical Q")
+  qqline(ts_residual)
+}
+
+
+
+independence_box_test <- function(ts_residual,porder,iorder,qorder){
+  A = Box.test(ts_residual, lag = (porder+qorder+1), type = "Box-Pierce", fitdf = (porder+qorder))
+  B = Box.test(ts_residual, lag = (porder+qorder+iorder), type = "Ljung-Box", fitdf = (porder+qorder+iorder-1))
+  
+  print (A)
+  print (B)
+  
+}
+
+```
+
+
+*Fit Arima Model to delta data: *
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+delta_arima = fit_arima(ts_data = delta,max_p = 6,d = 1,max_q = 6)
+```
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+delta_arima_porder = delta_arima$porder
+cat("After fitting, the best p order for delta is",delta_arima_porder)
+delta_arima_iorder = delta_arima$iorder
+
+cat("\n")
+cat("The i order is set to be",delta_arima_iorder)
+delta_arima_qorder = delta_arima$qorder
+
+cat("\n")
+cat("After fitting, the best q order for delta is",delta_arima_qorder)
+
+cat("\n")
+
+delta_arima_resid = delta_arima$final_model_residual
+plot_residual(delta_arima_resid)
+
+```
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+#independence test
+independence_box_test(delta_arima_resid,porder = delta_arima_porder, iorder = delta_arima_iorder, qorder = delta_arima_qorder)
+```
+
+
+*From the above result, the best model is arima (6,1,4). It can be seen that the residuals do not have constant variance, the QQ plot shows that the distribution of residuals are right-screw. The small p value from Box-pierce test and Box-Ljung test indicates that the residual are correlated. So the arima(6,1,4) is  not a good fit to the delta data. *
+
+*I then tried to find the best arima model with 2nd order differencing*
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+delta_arima2 = fit_arima(ts_data = delta,max_p = 10,d = 2,max_q = 10)
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+delta_arima_porder2 = delta_arima2$porder
+cat("After fitting, the best p order for delta is",delta_arima_porder2)
+cat("\n")
+
+delta_arima_iorder2 = delta_arima2$iorder
+cat("The i order is set to be",delta_arima_iorder2)
+delta_arima_qorder2 = delta_arima2$qorder
+
+cat("\n")
+cat("After fitting, the best q order for delta is",delta_arima_qorder2)
+
+cat("\n")
+
+delta_arima_resid2 = delta_arima2$final_model_residual
+plot_residual(delta_arima_resid2)
+
+independence_box_test(delta_arima_resid2,porder = delta_arima_porder2, iorder = delta_arima_iorder2, qorder = delta_arima_qorder2)
+
+
+```
+
+*After trying 2nd order differencing, the best model was found to be arima(2,2,8); however, the variance is still non-constant, and the normality assumption is worst then the 1st model. And the p value of the independence test do not increase a lot compared to the earlier model*
+
+
+*Fit Arima Model to aa data:*
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+aa_arima = fit_arima(ts_data = aa,max_p = 7,d = 0,max_q = 7)
+
+aa_arima_porder = aa_arima$porder
+cat("After fitting, the best p order for aa is",aa_arima_porder)
+aa_arima_iorder = aa_arima$iorder
+
+cat("\n")
+cat("The i order is set to be",aa_arima_iorder)
+aa_arima_qorder = aa_arima$qorder
+
+cat("\n")
+cat("After fitting, the best q order for aa is",aa_arima_qorder)
+
+cat("\n")
+resid_aa = resid(aa_arima$final_model)
+aa_arima_resid = aa_arima$final_model_residual
+plot_residual(aa_arima_resid)
+
+independence_box_test(aa_arima_resid,porder = aa_arima_porder, iorder = aa_arima_iorder, qorder = aa_arima_qorder)
+
+```
+
+
+*After fitting, the best model for aa is arima(5,1,4). The residual seemed stationary because it has constant mean and constant variance. All autocorrelation are within the significance band. However, the distirbution is right skewed. Independence test shows that the residual are uncorrelated because p value is greater than 0.05.*
+
+
+**Question 3: Forecasting**
+
+**Keep the last 6 data points for testing. Generate forecasts of those 6 months and compare the predicted values to the actual ones. Include 95% confidence interval for the forecasts. Provide plots and accuracy measures.**
+
+
+
+
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# delta data
+#forcasting with arima 
+#6 month ahead
+
+n = length(delta)
+nfit = n-6
+delta_model = arima(delta[1:nfit],order = c(delta_arima_porder,delta_arima_iorder,delta_arima_qorder),method = "ML")
+delta_pred = predict(delta_model,n.ahead = 6)
+ubound = delta_pred$pred+1.96*delta_pred$se
+lbound = delta_pred$pred-1.96*delta_pred$se
+
+plot(delta[(n-30):n],type = "l",main = "last 30 points of delta data",xlab = "time",ylab = "percentage", ylim = c(min(lbound)*1.1,max(ubound)*1.1))
+points(ts(delta_pred$pred,end = 30+1),col = "red")
+lines(ts(ubound,end = 30+1),col = "blue")
+lines(ts(lbound,end = 30+1),col = "blue")
+```
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# define function to output accuracy measure
+cal_accuracy = function(predicted,actual){
+  ### Mean Squared Prediction Error (MSPE)
+  MSPE = mean((predicted-actual)^2)
+  ### Mean Absolute Prediction Error (MAE)
+  MAE = mean(abs(predicted-actual))
+  ### Mean Absolute Percentage Error (MAPE)
+  MAPE = mean(abs(predicted-actual)/actual)
+  ### Precision Measure (PM)
+  PM = sum((predicted-actual)^2)/sum((actual-mean(actual))^2)
+  
+  cat ("The MSPE is", MSPE,"\n")
+  cat ("The MAE is", MAE,"\n")
+  cat ("The MAPE is", MAPE,"\n")
+  cat ("The PM is", PM,"\n")
+  
+  result = list()
+  result$MSPE = MSPE
+  result$MAE = MAE
+  result$MAPE = MAPE
+  result$PM = PM
+}
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+cat("The accuracy measure for the delta prediction is the following:\n")
+cal_accuracy(predicted = as.numeric(delta_pred$pred), actual = as.numeric(delta[(n-6):n]))
+
+```
+
+*For the prediction of delta using ARIMA model, the actual data falls within confidence interval*
+
+
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+# aadata
+#forcasting with arima 
+#6 month ahead
+
+n = length(aa)
+nfit = n-6
+aa_model = arima(aa[1:nfit],order = c(aa_arima_porder,aa_arima_iorder,aa_arima_qorder),method = "ML")
+aa_pred = predict(aa_model,n.ahead = 6)
+ubound = aa_pred$pred+1.96*aa_pred$se
+lbound = aa_pred$pred-1.96*aa_pred$se
+
+plot(aa[(n-30):n],type = "l",main = "last 30 points of aa data",xlab = "time",ylab = "percentage", ylim = c(min(lbound)*1.1,max(ubound)*1.1))
+points(ts(aa_pred$pred,end = 30+1),col = "red")
+lines(ts(ubound,end = 30+1),col = "blue")
+lines(ts(lbound,end = 30+1),col = "blue")
+```
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+cat("The accuracy measure for the aa prediction is the following:\n")
+cal_accuracy(predicted = as.numeric(aa_pred$pred), actual = as.numeric(aa[(n-6):n]))
+
+```
+
+*For the prediction of aa data using ARIMA model, the actual data falls within confidence interval*
+
+
+**Provide commentary on which airport and which airline you should choose to fly for the next six months during your analytics engagement, based solely on your above analysis.**
+
+
+*To compare the prediction, first we need to put the graph side-by-side*
+
+
+```{r, echo=TRUE,warning=FALSE,message=FALSE}
+
+
+plot(delta[(n-30):n],type = "l",main = "last 30 points of delta and aa data",xlab = "time",ylab = "percentage", ylim = c(0,0.4),col = "blue",lwd = 2)
+points(ts(delta_pred$pred,end = 30+1),col = "blue",lwd = 2)
+
+lines(aa[(n-30):n],type = "l",xlab = "time",ylab = "percentage", ylim = c(0,0.4),col = "red",lwd = 2)
+points(ts(aa_pred$pred,end = 30+1),col = "red",lwd = 2)
+
+legend(x=25,y=0.4,legend = c("delta","aa"),col = c("blue","red"),lwd = 2)
+
+
+ubound_delta = delta_pred$pred+1.96*delta_pred$se
+lbound_delta = delta_pred$pred-1.96*delta_pred$se
+
+lines(ts(ubound_delta,end = 30+1),col = "blue",lty = "99",lwd = 2)
+lines(ts(lbound_delta,end = 30+1),col = "blue",lty = "99",lwd = 2)
+
+ubound_aa = aa_pred$pred+1.96*aa_pred$se
+lbound_aa = aa_pred$pred-1.96*aa_pred$se
+lines(ts(ubound_aa,end = 30+1),col = "red",lty = "99",lwd = 2)
+lines(ts(lbound_aa,end = 30+1),col = "red",lty = "99",lwd = 2)
+```
+
+*In the above plot, the slod line is the real data, dash line is the confidence interval, the circle is the predict points. It can be seen that the confidence level of the two prediction overlap significantly, thus statistical test will not provide a definite answer. The actual data shows that the delta airline constantly have lower delay percentage for the recent 30 months. In addition, the predicted point and the actual data for the most recent 6 month also shows that delta is better. As a result, I will choose the delta airline*
